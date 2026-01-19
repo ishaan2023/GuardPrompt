@@ -1,0 +1,12 @@
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# Python
+venv/
+__pycache__/
+.env
+
+# OS
+.DS_Store
