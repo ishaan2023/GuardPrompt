@@ -1,82 +1,74 @@
-from pydantic_ai import Agent
-from app.schemas import PromptInput, OptimizedPrompt, RiskAssessment
-from app.config import MODEL_NAME
-import logging
+from app.schemas import OptimizedPrompt, RiskAssessment, PromptInput
+from typing import List
 
-logging.basicConfig(level=logging.INFO)
 
-SYSTEM_PROMPT = """
-You are GuardPrompt, an AI agent designed to analyze and optimize user prompts
-to reduce hallucinations, ambiguity, and unsafe behavior in large language models.
+def detect_risk(prompt: str) -> tuple[str, List[str]]:
+    prompt_lower = prompt.lower()
 
-Your responsibilities:
-1. Analyze the prompt for hallucination risk.
-2. Apply strict guardrails and constraints.
-3. Rewrite the prompt to be safer, clearer, and more reliable.
-4. Explain the changes you made.
+    high_risk_keywords = [
+        "medical", "cure", "diagnose", "treatment",
+        "legal", "lawsuit", "court",
+        "financial advice", "invest", "guaranteed returns",
+    ]
 
-Always be precise and conservative.
-"""
+    medium_risk_keywords = [
+        "predict", "forecast", "debate", "controversial",
+        "uncertain", "future",
+    ]
 
-guardprompt_agent = Agent(
-    model=MODEL_NAME,
-    system_prompt=SYSTEM_PROMPT,
-    retries=2,
-)
+    for word in high_risk_keywords:
+        if word in prompt_lower:
+            return "high", [
+                "Prompt requests medical, legal, or financial advice"
+            ]
+
+    for word in medium_risk_keywords:
+        if word in prompt_lower:
+            return "medium", [
+                "Prompt involves uncertainty, prediction, or speculation"
+            ]
+
+    return "low", [
+        "Prompt is informational and low risk"
+    ]
 
 
 def optimize_prompt(input_data: PromptInput) -> OptimizedPrompt:
-    """
-    Core GuardPrompt logic:
-    - Analyze risk
-    - Optimize prompt
-    - Return structured output
-    """
+    prompt = input_data.prompt
+    use_case = input_data.use_case
+    risk_preference = input_data.risk_preference
 
-    user_message = f"""
-Original Prompt:
-{input_data.prompt}
+    # 🔍 Detect actual risk from content
+    detected_risk, reasons = detect_risk(prompt)
 
-Use Case:
-{input_data.use_case}
+    optimized_prompt = f"""
+You are an expert {use_case} AI assistant.
 
-Risk Preference:
-{input_data.risk_preference}
+Follow these rules:
+- Be clear, accurate, and structured
+- Avoid hallucinations
+- Adjust response depth based on USER RISK PREFERENCE: {risk_preference}
+- Be extra cautious if DETECTED RISK LEVEL is high
 
-Tasks:
-1. Determine hallucination risk (low, medium, high).
-2. Rewrite the prompt with safety guardrails.
-3. Explain why the changes reduce hallucination.
-"""
+DETECTED RISK LEVEL:
+{detected_risk}
 
-    try:
-        result = guardprompt_agent.run(
-            user_message,
-            result_type=OptimizedPrompt
-        )
-        return result.data
+USER PROMPT:
+{prompt}
+""".strip()
 
-    except Exception as e:
-        logging.error(f"GuardPrompt failed: {e}")
+    explanation = [
+        "Added explicit role definition to guide the model",
+        f"Prompt tailored for the '{use_case}' use case",
+        f"Response depth controlled by user risk preference: '{risk_preference}'",
+        f"System detected overall hallucination risk as '{detected_risk}'",
+    ]
 
-        # Fallback safe prompt
-        fallback_prompt = f"""
-You are a cautious AI assistant.
-Only answer using verified information.
-If unsure, say "I don't know".
-
-Task:
-{input_data.prompt}
-"""
-
-        return OptimizedPrompt(
-            optimized_prompt=fallback_prompt,
-            explanation=[
-                "Fallback prompt used due to processing error.",
-                "Strict safety constraints applied."
-            ],
-            risk_assessment=RiskAssessment(
-                hallucination_risk="high",
-                reasons=["Agent execution failure"]
-            )
-        )
+    return OptimizedPrompt(
+        optimized_prompt=optimized_prompt,
+        explanation=explanation,
+        risk_assessment=RiskAssessment(
+            hallucination_risk=detected_risk,
+            reasons=reasons,
+        ),
+    )

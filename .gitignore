@@ -10,3 +10,7 @@ __pycache__/
 
 # OS
 .DS_Store
+# Environment variables
+.env
+.env.local
+.env.*.local

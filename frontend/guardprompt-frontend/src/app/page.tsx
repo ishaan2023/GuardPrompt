@@ -40,7 +40,7 @@ export default function Home() {
     setResult(null);
 
     try {
-      const res = await fetch("http://127.0.0.1:8002/optimize-prompt", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/optimize-prompt`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
